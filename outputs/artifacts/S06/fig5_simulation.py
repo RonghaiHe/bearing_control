@@ -46,14 +46,14 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     graph = FormationGraph(n_agents, edges, leader_indices)
 
     cube_vertices = np.array([
-        [0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 1.0],
+        [1.0, 1.0, 1.0],
         [0.0, 1.0, 0.0],
+        [1.0, 1.0, 0.0],
         [0.0, 0.0, 1.0],
         [1.0, 0.0, 1.0],
-        [1.0, 1.0, 1.0],
-        [0.0, 1.0, 1.0],
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
     ])
 
     desired_bearings = {}
@@ -61,7 +61,17 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
         desired_bearings[(i, j)] = compute_bearing(cube_vertices[i], cube_vertices[j])
 
     np.random.seed(42)
-    initial_positions = cube_vertices + 2.0 * np.random.randn(n_agents, 3)
+    initial_positions = cube_vertices + np.array([
+        [-10.0, 9.0, -1.0],
+        [-1.0, 9.0, -1.0],
+        [-13.0, 9.0, -8.0],
+        [1.0, 9.0, -9.0],
+        [-10.0, 0.0, -3.0],
+        [-4.0, 0.0, -3.0],
+        [-10.0, 1.5, -8.5],
+        [-1.0, 0.0, -9.0],
+    ])
+    print("Initial positions:\n", initial_positions)
     initial_velocities = np.zeros((n_agents, 3))
 
     return graph, desired_bearings, initial_positions, initial_velocities
@@ -95,15 +105,15 @@ def leader_motion_3d(t):
     Leaders travel along Y-axis. Formation contracts near obstacle at y=45.
     """
     v_c = np.array([0.0, 1.0, 0.0])
-    v_c_y = 1.0
+    v_c_y = 2.0
 
-    s = scale_function(t, v_c_y)
-    s_dot = scale_dot_function(t, v_c_y)
+    s = scale_function(t, v_c_y, contraction_zone=10.0)
+    s_dot = scale_dot_function(t, v_c_y, contraction_zone=10.0)
 
     c = v_c * t
 
-    p0_local = np.array([0.0, 1.0, 0.0])
-    p1_local = np.array([1.0, 1.0, 0.0])
+    p0_local = np.array([-10.0, 10.0, 0.0])
+    p1_local = np.array([0.0, 10.0, 0.0])
 
     leader_positions = np.array([
         c + s * p0_local,
@@ -227,13 +237,13 @@ def plot_results_3d(time_array, positions_history, velocities_history, bearing_e
 
     # All cube + face diagonal edges (bidirectional, deduplicated)
     snapshot_edges = [
-        (0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),
-        (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7),
-        (2, 3), (2, 4), (2, 5), (2, 6), (2, 7),
-        (3, 4), (3, 5), (3, 6), (3, 7),
-        (4, 5), (4, 6), (4, 7),
-        (5, 6), (5, 7),
-        (6, 7),
+        (0, 1), (0, 2), (0, 4), (0, 7),
+        (1, 3), (1, 5),
+        (2, 3), (2, 6),
+        (3, 7),
+        (4, 5), (4, 6),
+        (5, 7),
+        (6, 7)
     ]
 
     # Draw dashed trajectories
@@ -270,10 +280,11 @@ def plot_results_3d(time_array, positions_history, velocities_history, bearing_e
     ax.set_xlabel('x (m)', fontsize=11)
     ax.set_ylabel('y (m)', fontsize=11)
     ax.set_zlabel('z (m)', fontsize=11)
-    ax.set_xlim(-10, 10)
-    ax.set_ylim(0, 80)
-    ax.set_zlim(-10, 10)
-    ax.view_init(elev=15, azim=-55)
+    ax.set_xlim(-13, 13)
+    ax.set_ylim(-5, 80)
+    ax.set_zlim(-13, 13)
+    ax.set_aspect('equal')
+    ax.view_init(elev=15, azim=-20)
 
     # Legend
     from matplotlib.lines import Line2D
@@ -291,8 +302,63 @@ def plot_results_3d(time_array, positions_history, velocities_history, bearing_e
     plt.close()
 
 
+def plot_curves(time_array, positions_history, velocities_history, bearing_errors):
+    """Generate velocity and bearing error plots matching fig4 style."""
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    
+    leader_idx = [0, 1]
+    follower_idx = list(range(2, 8))
+    
+    # (a) Bearing error
+    ax1 = axes[0]
+    ax1.plot(time_array, bearing_errors, 'b-', linewidth=2)
+    ax1.set_xlabel('Time')
+    ax1.set_ylabel('Total Bearing Error')
+    ax1.set_title(r'(a) Total Bearing Error $\sum_{(i,j) \in \mathcal{E}} \|g_{ij}(t) - g_{ij}^*\|$')
+    ax1.grid(True, alpha=0.3)
+    
+    # (b) x-velocity
+    ax2 = axes[1]
+    for i in leader_idx:
+        ax2.plot(time_array, velocities_history[:, i, 0],
+                 color='red', linestyle='-', linewidth=2)
+    for i in follower_idx:
+        ax2.plot(time_array, velocities_history[:, i, 0],
+                 color='blue', linestyle='--', linewidth=2)
+    ax2.plot([], [], color='red', linestyle='-', linewidth=2, label='Leader')
+    ax2.plot([], [], color='blue', linestyle='--', linewidth=2, label='Follower')
+    ax2.set_xlabel('Time')
+    ax2.set_ylabel('x-velocity (m/s)')
+    ax2.set_title('(b) x-velocity')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # (c) y-velocity
+    ax3 = axes[2]
+    for i in leader_idx:
+        ax3.plot(time_array, velocities_history[:, i, 1],
+                 color='red', linestyle='-', linewidth=2)
+    for i in follower_idx:
+        ax3.plot(time_array, velocities_history[:, i, 1],
+                 color='blue', linestyle='--', linewidth=2)
+    ax3.plot([], [], color='red', linestyle='-', linewidth=2, label='Leader')
+    ax3.plot([], [], color='blue', linestyle='--', linewidth=2, label='Follower')
+    ax3.set_xlabel('Time (sec)')
+    ax3.set_ylabel('y-velocity (m/s)')
+    ax3.set_title('(c) y-velocity')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig('/home/ronghai/bearing_control/outputs/artifacts/S06/fig5_simulation_curves.png',
+                dpi=150, bbox_inches='tight')
+    plt.close()
+    print("Figure 5 curves saved to outputs/artifacts/S06/fig5_simulation_curves.png")
+
+
 if __name__ == "__main__":
     print("Running Fig. 5 simulation (3D cube formation through obstacle)...")
     time_array, positions_history, velocities_history, bearing_errors = run_simulation_3d()
     plot_results_3d(time_array, positions_history, velocities_history, bearing_errors)
+    plot_curves(time_array, positions_history, velocities_history, bearing_errors)
     print("Simulation complete!")
