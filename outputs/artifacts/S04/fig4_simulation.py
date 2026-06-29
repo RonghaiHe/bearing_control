@@ -25,172 +25,131 @@ from S03.control_constant_velocity import ControlLaw7
 
 
 def setup_square_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.ndarray], np.ndarray, np.ndarray]:
-    """
-    Setup the square formation from Fig. 2(b).
-    
-    The square formation has:
-    - 4 agents in 2D
-    - Agents 0, 1 are leaders (solid dots)
-    - Agents 2, 3 are followers (hollow dots)
-    - Desired bearings form a square pattern
-    
-    Returns:
-        Tuple of (graph, desired_bearings, initial_positions, initial_velocities)
-    """
-    # Formation graph: square with 4 agents
-    # Edges: (0,1), (1,2), (2,3), (3,0), (0,2), (1,3)
-    # Leaders: 0, 1; Followers: 2, 3
     n_agents = 4
-    edges = [(0, 1), (1, 2), (2, 3), (3, 0), (0, 2), (1, 3)]
     leader_indices = [0, 1]
+    
+    edges = [
+        (0, 1), (1, 0),
+        (0, 2), (2, 0),
+        (1, 3), (3, 1),
+        (2, 3), (3, 2),
+        (0, 3), (3, 0),
+        (1, 2), (2, 1),
+    ]
     
     graph = FormationGraph(n_agents, edges, leader_indices)
     
-    # Desired bearings for a unit square
-    # The square is centered at origin with side length 1
-    # Agent positions (desired pattern):
-    # 0: (-0.5, 0.5), 1: (0.5, 0.5), 2: (0.5, -0.5), 3: (-0.5, -0.5)
-    
-    # Compute desired bearings
-    desired_bearings = {}
-    
-    # Edge (0,1): from top-left to top-right
-    desired_bearings[(0, 1)] = np.array([1.0, 0.0])
-    
-    # Edge (1,2): from top-right to bottom-right
-    desired_bearings[(1, 2)] = np.array([0.0, -1.0])
-    
-    # Edge (2,3): from bottom-right to bottom-left
-    desired_bearings[(2, 3)] = np.array([-1.0, 0.0])
-    
-    # Edge (3,0): from bottom-left to top-left
-    desired_bearings[(3, 0)] = np.array([0.0, 1.0])
-    
-    # Edge (0,2): diagonal from top-left to bottom-right
-    desired_bearings[(0, 2)] = np.array([1.0/np.sqrt(2), -1.0/np.sqrt(2)])
-    
-    # Edge (1,3): diagonal from top-right to bottom-left
-    desired_bearings[(1, 3)] = np.array([-1.0/np.sqrt(2), -1.0/np.sqrt(2)])
-    
-    # Initial positions (arbitrary, not at target)
-    initial_positions = np.array([
-        [0.0, 2.0],   # Leader 0
-        [2.0, 2.0],   # Leader 1
-        [2.5, 0.0],   # Follower 2
-        [0.0, 0.0],   # Follower 3
+    cube_vertices = np.array([
+        [-0.5, 0.5],
+        [0.5, 0.5],
+        [0.5, -0.5],
+        [-0.5, -0.5],
     ])
     
-    # Initial velocities (zero)
+    desired_bearings = {}
+    for (i, j) in edges:
+        desired_bearings[(i, j)] = compute_bearing(cube_vertices[i], cube_vertices[j])
+    
+    initial_positions = np.array([
+        [0.0, 10.0],
+        [10.0, 10.0],
+        [12.0, 0.0],
+        [0.0, 0.0],
+    ])
+    
     initial_velocities = np.zeros((n_agents, 2))
     
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def leader_motion(t: float) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Define leader motion for the simulation.
-    
-    The leaders move such that the formation:
-    1. Translates in x-direction
-    2. Scales (expands/contracts)
-    
-    From the paper description:
-    - Translation velocity: v_c = [0.5, 0] (constant)
-    - Scaling rate: alpha = -0.1 (contraction)
-    
-    Args:
-        t: Time
-    
-    Returns:
-        Tuple of (leader_positions, leader_velocities)
-    """
-    # Constant translational velocity
+def leader_motion(t: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     v_c = np.array([0.5, 0.0])
-    
-    # Time-varying scaling rate (for demonstration)
-    # The paper mentions scaling velocity in x-direction is negative
-    alpha = -0.1
-    
-    # Centroid motion
+
+    scale = 1.0 + 0.1 * np.sin(0.5 * t)
+    scale_dot = 0.05 * np.cos(0.5 * t)
+    scale_ddot = -0.025 * np.sin(0.5 * t)
+
     c = v_c * t
-    
-    # Leader positions (following desired pattern with time-varying scale)
-    scale = 1.0 + 0.1 * np.sin(0.5 * t)  # Oscillating scale for demonstration
-    
+
+    p0_local = np.array([-0.5, 0.5])
+    p1_local = np.array([0.5, 0.5])
+
     leader_positions = np.array([
-        c + scale * np.array([-0.5, 0.5]),  # Leader 0
-        c + scale * np.array([0.5, 0.5]),   # Leader 1
+        c + scale * p0_local,
+        c + scale * p1_local,
     ])
-    
-    # Leader velocities (from Theorem 2, Eq. 6)
-    # v_i = v_c + alpha * (p_i - c)
+
     leader_velocities = np.array([
-        v_c + alpha * (leader_positions[0] - c),
-        v_c + alpha * (leader_positions[1] - c),
+        v_c + scale_dot * p0_local,
+        v_c + scale_dot * p1_local,
     ])
-    
-    return leader_positions, leader_velocities
+
+    leader_accelerations = np.array([
+        scale_ddot * p0_local,
+        scale_ddot * p1_local,
+    ])
+
+    return leader_positions, leader_velocities, leader_accelerations
 
 
 def run_simulation():
-    """Run the simulation and generate figures."""
-    # Setup
     graph, desired_bearings, initial_positions, initial_velocities = setup_square_formation()
-    
-    # Simulation parameters
+
     k_p = 0.5
     k_v = 2.0
     dt = 0.01
-    T = 10.0
+    T = 30.0
     n_steps = int(T / dt) + 1
-    
-    # Initialize history arrays
+
+    B = compute_bearing_laplacian(graph, desired_bearings)
+    B_ll, B_lf, B_fl, B_ff = partition_bearing_laplacian(B, graph)
+    B_ff_inv = np.linalg.inv(B_ff)
+
+    n_followers = len(graph.follower_indices)
+
     time_array = np.linspace(0, T, n_steps)
     positions_history = np.zeros((n_steps, 4, 2))
     velocities_history = np.zeros((n_steps, 4, 2))
     bearing_errors = np.zeros((n_steps,))
-    
-    # Set initial conditions
+
     positions = initial_positions.copy()
     velocities = initial_velocities.copy()
-    
-    # Create control law
-    control_law = ControlLaw7(graph, desired_bearings, k_p, k_v)
-    
-    # Simulation loop
+
     for step in range(n_steps):
         t = time_array[step]
-        
-        # Get leader motion
-        leader_pos, leader_vel = leader_motion(t)
-        
-        # Update leader positions/velocities
+
+        leader_pos, leader_vel, leader_accel = leader_motion(t)
+
         for idx, i in enumerate(graph.leader_indices):
             positions[i] = leader_pos[idx]
             velocities[i] = leader_vel[idx]
-        
-        # Store current state
+
         positions_history[step] = positions.copy()
         velocities_history[step] = velocities.copy()
-        
-        # Compute bearing error
+
         total_error = 0.0
         for (i, j), g_desired in desired_bearings.items():
             g_actual = compute_bearing(positions[i], positions[j])
             total_error += np.linalg.norm(g_actual - g_desired)
         bearing_errors[step] = total_error
-        
-        # Create formation state
-        state = FormationState(graph, positions, velocities)
-        
-        # Compute controls for followers
-        controls = control_law.compute_all_controls(state)
-        
-        # Update follower dynamics (double integrator)
-        for i in graph.follower_indices:
+
+        p_f = positions[graph.follower_indices].flatten()
+        v_f = velocities[graph.follower_indices].flatten()
+        p_l = positions[graph.leader_indices].flatten()
+        v_l = velocities[graph.leader_indices].flatten()
+
+        delta_p = p_f + B_ff_inv @ B_fl @ p_l
+        delta_v = v_f + B_ff_inv @ B_fl @ v_l
+
+        v_l_dot = leader_accel.flatten()
+        u_f = -k_p * delta_p - k_v * delta_v
+
+        controls = u_f.reshape(n_followers, 2)
+
+        for idx, i in enumerate(graph.follower_indices):
             positions[i] += velocities[i] * dt
-            velocities[i] += controls[i] * dt
-    
+            velocities[i] += controls[idx] * dt
+
     return time_array, positions_history, velocities_history, bearing_errors
 
 

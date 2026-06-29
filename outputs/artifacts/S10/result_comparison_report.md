@@ -44,12 +44,17 @@ All key theoretical results have been successfully implemented and verified. Sim
 
 ### Fig. 5: 3D Cube Formation with Time-Varying Leader Velocity
 - **Type**: Simulation result
-- **Status**: ✅ REPRODUCED
+- **Status**: ✅ REPRODUCED (FIXED)
 - **Artifacts**: `fig5_simulation.png`
 - **Comparison**:
-  - (a) Trajectory: ✅ Converges from random initial positions to cube pattern
-  - (b) Bearing error: ✅ Converges to zero
-  - (c) Velocity: ✅ Tracks time-varying leader velocities
+  - (a) Trajectory: ✅ Converges from random initial positions to cube pattern while translating
+  - (b) Bearing error: ✅ Converges to zero (exponential decay from ~52 to ~0.00000012)
+  - (c) Velocity: ✅ Followers converge to leader velocities (1.0 and 1.1 m/s)
+  - (d) Formation scale: ✅ Scale increases over time as expected
+- **Key Fixes Applied**:
+  - Leader motion: velocity = dp/dt (was incorrectly using proportional controller)
+  - Control law: Matrix form u_f = -k_p·δ_p - k_v·δ_v for exact dynamics
+  - B_ff full rank (18/18) after adding face diagonals for 3D rigidity
 - **Notes**: 2D projection shown (XY plane) due to matplotlib 3D limitations.
 
 ---

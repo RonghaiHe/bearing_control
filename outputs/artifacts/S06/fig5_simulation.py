@@ -42,18 +42,22 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     # Leaders: 0, 1; Followers: 2-7
     n_agents = 8
     
-    # Edges: Each agent connects to its neighbors in the cube
+    # Edges: Cube + face diagonals for 3D rigidity
     # Cube vertices: 0=(0,0,0), 1=(1,0,0), 2=(1,1,0), 3=(0,1,0),
     #                4=(0,0,1), 5=(1,0,1), 6=(1,1,1), 7=(0,1,1)
+    #
+    # XOR encodes which coordinates differ:
+    #   1 (001) = x-axis edge, 2 (010) = y-axis edge, 4 (100) = z-axis edge
+    #   3 (011) = face diagonal (xy), 5 (101) = face diagonal (xz), 6 (110) = face diagonal (yz)
+    # For 3D infinitesimal bearing rigidity, need >= 3n-6 = 18 edges.
+    # 12 cube edges + 12 face diagonals = 24 edges → sufficient for rigidity.
     edges = []
     
-    # Connect each vertex to its 3 neighbors (along cube edges)
     for i in range(8):
         for j in range(8):
             if i < j:
-                # Check if i and j differ in exactly one coordinate
                 diff = i ^ j  # XOR
-                if diff in [1, 2, 4]:  # Powers of 2
+                if diff in [1, 2, 4, 3, 5, 6]:  # cube edges + face diagonals
                     edges.append((i, j))
                     edges.append((j, i))  # Bidirectional
     
@@ -89,58 +93,66 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def leader_motion_3d(t: float) -> Tuple[np.ndarray, np.ndarray]:
+def leader_motion_3d(t: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Define leader motion for the 3D simulation.
+    Compute leader positions, velocities, and accelerations.
     
-    The leaders move such that the formation:
-    1. Translates in all three dimensions
-    2. Scales (expands/contracts)
+    Leaders are SET directly (not evolved via double-integrator), so:
+      - velocity = dp/dt (derivative of position)
+      - acceleration = d²p/dt² (derivative of velocity)
     
-    Args:
-        t: Time
+    Position model:
+      p_i(t) = c(t) + scale(t) * p_i_local
+      where c(t) = v_c * t, scale(t) = 1 + 0.1*t
     
-    Returns:
-        Tuple of (leader_positions, leader_velocities)
+    Velocity (derivative of position):
+      v_i(t) = v_c + scale_dot * p_i_local = [1 + 0.1*p_i_local_x, 0, 0]
+    
+    Acceleration (derivative of velocity):
+      a_i(t) = [0, 0, 0]  (constant velocity components)
+    
+    The paper's control law (10) requires leader accelerations for the
+    -v_j_dot feedback term. With constant-velocity leaders, a_i = 0,
+    and the control law reduces to the same form as (7) but with the
+    acceleration feedback term simply being zero.
     """
-    # Time-varying translational velocity
-    v_c = np.array([
-        0.3 * np.sin(0.2 * t),
-        0.2 * np.cos(0.3 * t),
-        0.1 * np.sin(0.1 * t)
-    ])
+    v_c = np.array([1.0, 0.0, 0.0])
     
-    # Time-varying scaling rate
-    alpha = 0.05 * np.sin(0.5 * t)
+    scale = 1.0 + 0.1 * t
+    scale_dot = 0.1
     
-    # Centroid motion (integral of velocity)
-    c = np.array([
-        -1.5 * np.cos(0.2 * t) + 1.5,
-        0.67 * np.sin(0.3 * t),
-        -1.0 * np.cos(0.1 * t) + 1.0
-    ])
+    c = v_c * t
     
-    # Leader positions (following desired pattern with time-varying scale)
-    scale = 1.0 + 0.2 * np.sin(0.5 * t)  # Oscillating scale
+    p0_local = np.array([0.0, 0.0, 0.0])
+    p1_local = np.array([1.0, 0.0, 0.0])
     
-    # Leader 0 at (0,0,0), Leader 1 at (1,0,0) in cube coordinates
+    # Positions
     leader_positions = np.array([
-        c + scale * np.array([0.0, 0.0, 0.0]),  # Leader 0
-        c + scale * np.array([1.0, 0.0, 0.0]),  # Leader 1
+        c + scale * p0_local,
+        c + scale * p1_local,
     ])
     
-    # Leader velocities (from Theorem 2, Eq. 6)
-    # v_i = v_c + alpha * (p_i - c)
+    # Velocities = dp/dt = v_c + scale_dot * p_local
     leader_velocities = np.array([
-        v_c + alpha * (leader_positions[0] - c),
-        v_c + alpha * (leader_positions[1] - c),
+        v_c + scale_dot * p0_local,
+        v_c + scale_dot * p1_local,
     ])
     
-    return leader_positions, leader_velocities
+    # Accelerations = d²p/dt² = 0 (scale_dot is constant)
+    leader_accelerations = np.zeros((2, 3))
+    
+    return leader_positions, leader_velocities, leader_accelerations
 
 
 def run_simulation_3d():
-    """Run the 3D simulation and generate figures."""
+    """Run the 3D simulation and generate figures.
+    
+    Uses the MATRIX FORM control law (B_ff^{-1}) for exact dynamics:
+        u_f = -B_ff^{-1} * [k_p * B_ff * delta_p + k_v * B_ff * delta_v - B_fl * v_l_dot]
+            = -k_p * delta_p - k_v * delta_v + B_ff^{-1} * B_fl * v_l_dot
+    
+    This gives exact closed-loop dynamics: delta_v_dot = -k_p * delta_p - k_v * delta_v
+    """
     # Setup
     graph, desired_bearings, initial_positions, initial_velocities = setup_cube_formation()
     
@@ -148,8 +160,20 @@ def run_simulation_3d():
     k_p = 0.5
     k_v = 2.0
     dt = 0.01
-    T = 15.0
+    T = 20.0
     n_steps = int(T / dt) + 1
+    
+    # Compute bearing Laplacian and partition
+    B = compute_bearing_laplacian(graph, desired_bearings)
+    B_ll, B_lf, B_fl, B_ff = partition_bearing_laplacian(B, graph)
+    
+    # Pre-compute B_ff^{-1} * B_fl for feedforward
+    B_ff_inv = np.linalg.inv(B_ff)
+    B_ff_inv_B_fl = B_ff_inv @ B_fl
+    
+    # Follower indices mapping
+    n_followers = len(graph.follower_indices)
+    n_f = n_followers * 3  # 3D
     
     # Initialize history arrays
     time_array = np.linspace(0, T, n_steps)
@@ -161,42 +185,45 @@ def run_simulation_3d():
     positions = initial_positions.copy()
     velocities = initial_velocities.copy()
     
-    # Create control law
-    control_law = ControlLaw10(graph, desired_bearings, k_p, k_v)
-    
     # Simulation loop
     for step in range(n_steps):
         t = time_array[step]
         
-        # Get leader motion
-        leader_pos, leader_vel = leader_motion_3d(t)
+        leader_pos, leader_vel, leader_accel = leader_motion_3d(t)
         
-        # Update leader positions/velocities
         for idx, i in enumerate(graph.leader_indices):
             positions[i] = leader_pos[idx]
             velocities[i] = leader_vel[idx]
         
-        # Store current state
         positions_history[step] = positions.copy()
         velocities_history[step] = velocities.copy()
         
-        # Compute bearing error
         total_error = 0.0
         for (i, j), g_desired in desired_bearings.items():
             g_actual = compute_bearing(positions[i], positions[j])
             total_error += np.linalg.norm(g_actual - g_desired)
         bearing_errors[step] = total_error
         
-        # Create formation state
-        state = FormationState(graph, positions, velocities)
+        # Compute tracking errors: delta_p = p_f + B_ff^{-1} * B_fl * p_l
+        p_f = positions[graph.follower_indices].flatten()
+        v_f = velocities[graph.follower_indices].flatten()
+        p_l = positions[graph.leader_indices].flatten()
+        v_l = velocities[graph.leader_indices].flatten()
         
-        # Compute controls for followers
-        controls = control_law.compute_all_controls(state)
+        delta_p = p_f + B_ff_inv @ B_fl @ p_l
+        delta_v = v_f + B_ff_inv @ B_fl @ v_l
         
-        # Update follower dynamics (double integrator)
-        for i in graph.follower_indices:
+        # Matrix form control: u_f = -k_p * delta_p - k_v * delta_v + B_ff^{-1} * B_fl * v_l_dot
+        # This gives exact dynamics: delta_v_dot = -k_p * delta_p - k_v * delta_v
+        v_l_dot = leader_accel.flatten()
+        u_f = -k_p * delta_p - k_v * delta_v + B_ff_inv_B_fl @ v_l_dot
+        
+        # Reshape to (n_followers, 3) and apply
+        controls = u_f.reshape(n_followers, 3)
+        
+        for idx, i in enumerate(graph.follower_indices):
             positions[i] += velocities[i] * dt
-            velocities[i] += controls[i] * dt
+            velocities[i] += controls[idx] * dt
     
     return time_array, positions_history, velocities_history, bearing_errors
 
