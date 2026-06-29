@@ -26,12 +26,11 @@ from S03.control_constant_velocity import ControlLaw7
 
 def setup_square_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.ndarray], np.ndarray, np.ndarray]:
     n_agents = 4
-    leader_indices = [0, 1]
+    leader_indices = [1, 2]
     
     edges = [
         (0, 1), (1, 0),
         (0, 2), (2, 0),
-        (1, 3), (3, 1),
         (2, 3), (3, 2),
         (0, 3), (3, 0),
         (1, 2), (2, 1),
@@ -51,10 +50,10 @@ def setup_square_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.n
         desired_bearings[(i, j)] = compute_bearing(cube_vertices[i], cube_vertices[j])
     
     initial_positions = np.array([
-        [0.0, 10.0],
-        [10.0, 10.0],
-        [12.0, 0.0],
         [0.0, 0.0],
+        [10.0, 10.0],
+        [10.0, -10.0],
+        [19.0, 5.0],
     ])
     
     initial_velocities = np.zeros((n_agents, 2))
