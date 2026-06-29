@@ -71,20 +71,19 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
         [-10.0, 1.5, -8.5],
         [-1.0, 0.0, -9.0],
     ])
-    print("Initial positions:\n", initial_positions)
     initial_velocities = np.zeros((n_agents, 3))
 
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.3):
+def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.1):
     """Bucket-shaped scale: normal → zoom out → pass → zoom in."""
     y = v_c_y * t
     
-    zoom_out_start = obstacle_y - 15.0  # y=30: start zooming out
-    zoom_out_end = obstacle_y - 5.0     # y=40: fully contracted
-    zoom_in_start = obstacle_y + 5.0    # y=50: start expanding
-    zoom_in_end = obstacle_y + 15.0     # y=60: fully expanded
+    zoom_out_start = obstacle_y - 10.0  # y=35: start zooming out
+    zoom_out_end = obstacle_y - 3.0     # y=42: fully contracted
+    zoom_in_start = obstacle_y + 3.0    # y=48: start expanding
+    zoom_in_end = obstacle_y + 10.0     # y=55: fully expanded
     
     if y < zoom_out_start:
         return 1.0
@@ -100,14 +99,14 @@ def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.3):
         return 1.0
 
 
-def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.3):
+def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.1):
     """Derivative of bucket-shaped scale function."""
     y = v_c_y * t
     
-    zoom_out_start = obstacle_y - 15.0
-    zoom_out_end = obstacle_y - 5.0
-    zoom_in_start = obstacle_y + 5.0
-    zoom_in_end = obstacle_y + 15.0
+    zoom_out_start = obstacle_y - 10.0  # y=35
+    zoom_out_end = obstacle_y - 3.0     # y=42
+    zoom_in_start = obstacle_y + 3.0    # y=48
+    zoom_in_end = obstacle_y + 10.0     # y=55
     
     if y < zoom_out_start or y >= zoom_in_end:
         return 0.0
@@ -134,8 +133,8 @@ def leader_motion_3d(t):
 
     c = v_c * t
 
-    p0_local = np.array([-10.0, 10.0, 0.0])
-    p1_local = np.array([0.0, 10.0, 0.0])
+    p0_local = np.array([0.0, 1.0, 1.0])  # cube vertex 0
+    p1_local = np.array([1.0, 1.0, 1.0])  # cube vertex 1
 
     leader_positions = np.array([
         c + s * p0_local,
