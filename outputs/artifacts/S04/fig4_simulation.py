@@ -156,10 +156,10 @@ def plot_results(time_array, positions_history, velocities_history, bearing_erro
     """Generate figures matching Fig. 4 in the paper."""
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    leader_idx = [0, 1]
-    follower_idx = [2, 3]
+    leader_idx = [1, 2]
+    follower_idx = [0, 3]
     snapshot_edges = [(0, 1), (0, 2), (0, 3), (1, 2), (2, 3)]
-    n_snapshots = 5
+    n_snapshots = 3
 
     # Fig. 4(a): Trajectory with snapshot formations
     ax1 = axes[0, 0]
