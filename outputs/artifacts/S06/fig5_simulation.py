@@ -77,21 +77,48 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def scale_function(t, v_c_y=1.0, obstacle_y=45.0, contraction_zone=5.0, min_scale=0.3):
-    """Scale that contracts near obstacle - sharp Gaussian transition."""
-    y_center = v_c_y * t
-    dist = y_center - obstacle_y
-    sigma = contraction_zone / 2.0
-    return min_scale + (1.0 - min_scale) * np.exp(-dist**2 / (2.0 * sigma**2))
+def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.3):
+    """Bucket-shaped scale: normal → zoom out → pass → zoom in."""
+    y = v_c_y * t
+    
+    zoom_out_start = obstacle_y - 15.0  # y=30: start zooming out
+    zoom_out_end = obstacle_y - 5.0     # y=40: fully contracted
+    zoom_in_start = obstacle_y + 5.0    # y=50: start expanding
+    zoom_in_end = obstacle_y + 15.0     # y=60: fully expanded
+    
+    if y < zoom_out_start:
+        return 1.0
+    elif y < zoom_out_end:
+        progress = (y - zoom_out_start) / (zoom_out_end - zoom_out_start)
+        return 1.0 - (1.0 - min_scale) * 0.5 * (1.0 - np.cos(np.pi * progress))
+    elif y < zoom_in_start:
+        return min_scale
+    elif y < zoom_in_end:
+        progress = (y - zoom_in_start) / (zoom_in_end - zoom_in_start)
+        return min_scale + (1.0 - min_scale) * 0.5 * (1.0 - np.cos(np.pi * progress))
+    else:
+        return 1.0
 
 
-def scale_dot_function(t, v_c_y=1.0, obstacle_y=45.0, contraction_zone=5.0, min_scale=0.3):
-    """Derivative of Gaussian scale function."""
-    y_center = v_c_y * t
-    dist = y_center - obstacle_y
-    sigma = contraction_zone / 2.0
-    gaussian = np.exp(-dist**2 / (2.0 * sigma**2))
-    return (1.0 - min_scale) * gaussian * (-dist / sigma**2) * v_c_y
+def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.3):
+    """Derivative of bucket-shaped scale function."""
+    y = v_c_y * t
+    
+    zoom_out_start = obstacle_y - 15.0
+    zoom_out_end = obstacle_y - 5.0
+    zoom_in_start = obstacle_y + 5.0
+    zoom_in_end = obstacle_y + 15.0
+    
+    if y < zoom_out_start or y >= zoom_in_end:
+        return 0.0
+    elif y < zoom_out_end:
+        progress = (y - zoom_out_start) / (zoom_out_end - zoom_out_start)
+        return -(1.0 - min_scale) * 0.5 * np.sin(np.pi * progress) * np.pi / (zoom_out_end - zoom_out_start) * v_c_y
+    elif y < zoom_in_start:
+        return 0.0
+    else:
+        progress = (y - zoom_in_start) / (zoom_in_end - zoom_in_start)
+        return (1.0 - min_scale) * 0.5 * np.sin(np.pi * progress) * np.pi / (zoom_in_end - zoom_in_start) * v_c_y
 
 
 def leader_motion_3d(t):
@@ -102,8 +129,8 @@ def leader_motion_3d(t):
     v_c = np.array([0.0, 1.0, 0.0])
     v_c_y = 2.0
 
-    s = scale_function(t, v_c_y, contraction_zone=5.0)
-    s_dot = scale_dot_function(t, v_c_y, contraction_zone=5.0)
+    s = scale_function(t, v_c_y)
+    s_dot = scale_dot_function(t, v_c_y)
 
     c = v_c * t
 
