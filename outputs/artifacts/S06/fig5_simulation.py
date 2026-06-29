@@ -76,14 +76,14 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.05):
+def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.15):
     """Bucket-shaped scale: normal → zoom out → pass → zoom in."""
     y = v_c_y * t
     
-    zoom_out_start = obstacle_y - 10.0  # y=35: start zooming out
-    zoom_out_end = obstacle_y - 3.0     # y=42: fully contracted
-    zoom_in_start = obstacle_y + 3.0    # y=48: start expanding
-    zoom_in_end = obstacle_y + 10.0     # y=55: fully expanded
+    zoom_out_start = obstacle_y - 15.0  # y=30: start zooming out
+    zoom_out_end = obstacle_y - 5.0     # y=40: fully contracted
+    zoom_in_start = obstacle_y + 5.0    # y=50: start expanding
+    zoom_in_end = obstacle_y + 15.0     # y=60: fully expanded
     
     if y < zoom_out_start:
         return 1.0
@@ -99,14 +99,14 @@ def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.05):
         return 1.0
 
 
-def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.05):
+def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.15):
     """Derivative of bucket-shaped scale function."""
     y = v_c_y * t
     
-    zoom_out_start = obstacle_y - 10.0  # y=35
-    zoom_out_end = obstacle_y - 3.0     # y=42
-    zoom_in_start = obstacle_y + 3.0    # y=48
-    zoom_in_end = obstacle_y + 10.0     # y=55
+    zoom_out_start = obstacle_y - 15.0  # y=30
+    zoom_out_end = obstacle_y - 5.0     # y=40
+    zoom_in_start = obstacle_y + 5.0    # y=50
+    zoom_in_end = obstacle_y + 15.0     # y=60
     
     if y < zoom_out_start or y >= zoom_in_end:
         return 0.0
@@ -278,7 +278,7 @@ def plot_results_3d(time_array, positions_history, velocities_history, bearing_e
 
     # Draw ~6 snapshots
     n_snapshots = 6
-    snapshot_indices = np.linspace(0, len(time_array) - 1, n_snapshots, dtype=int)
+    snapshot_indices = [0, 1000, 2000, 3000]
 
     for si in snapshot_indices:
         pos = positions_history[si]
@@ -296,7 +296,7 @@ def plot_results_3d(time_array, positions_history, velocities_history, bearing_e
                        edgecolors='darkblue', linewidths=0.5)
 
     # Draw obstacle
-    draw_obstacle(ax, obstacle_y=45.0, wall_size=3.0, opening_size=1.5)
+    draw_obstacle(ax, obstacle_y=45.0, wall_size=13.0, opening_size=4.0)
 
     ax.set_xlabel('x (m)', fontsize=11)
     ax.set_ylabel('y (m)', fontsize=11)
@@ -325,7 +325,7 @@ def plot_results_3d(time_array, positions_history, velocities_history, bearing_e
 
 def plot_curves(time_array, positions_history, velocities_history, bearing_errors):
     """Generate velocity and bearing error plots matching fig4 style."""
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    fig, axes = plt.subplots(1, 4, figsize=(24, 5))
     
     leader_idx = [0, 1]
     follower_idx = list(range(2, 8))
@@ -369,6 +369,22 @@ def plot_curves(time_array, positions_history, velocities_history, bearing_error
     ax3.set_title('(c) y-velocity')
     ax3.legend()
     ax3.grid(True, alpha=0.3)
+    
+    # (d) z-velocity
+    ax4 = axes[3]
+    for i in leader_idx:
+        ax4.plot(time_array, velocities_history[:, i, 2],
+                 color='red', linestyle='-', linewidth=2)
+    for i in follower_idx:
+        ax4.plot(time_array, velocities_history[:, i, 2],
+                 color='blue', linestyle='--', linewidth=2)
+    ax4.plot([], [], color='red', linestyle='-', linewidth=2, label='Leader')
+    ax4.plot([], [], color='blue', linestyle='--', linewidth=2, label='Follower')
+    ax4.set_xlabel('Time (sec)')
+    ax4.set_ylabel('z-velocity (m/s)')
+    ax4.set_title('(d) z-velocity')
+    ax4.legend()
+    ax4.grid(True, alpha=0.3)
     
     plt.tight_layout()
     plt.savefig('/home/ronghai/bearing_control/outputs/artifacts/S06/fig5_simulation_curves.png',
