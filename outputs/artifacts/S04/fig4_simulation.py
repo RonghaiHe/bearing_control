@@ -20,7 +20,7 @@ import os
 # Add parent directories to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from S01.formation_framework import FormationGraph, FormationState, compute_bearing
-from S02.bearing_laplacian import compute_bearing_laplacian, partition_bearing_laplacian
+from S02.bearing_laplacian import compute_bearing_laplacian
 from S03.control_constant_velocity import ControlLaw7
 
 
@@ -62,30 +62,40 @@ def setup_square_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.n
 
 
 def leader_motion(t: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    v_c = np.array([0.5, 0.0])
+    T = 180.0
+    pi = np.pi
 
-    scale = 1.0 + 0.1 * np.sin(0.5 * t)
-    scale_dot = 0.05 * np.cos(0.5 * t)
-    scale_ddot = -0.025 * np.sin(0.5 * t)
+    s = 20.0 + 20.0 * (t / T) - 20.0 * np.sin(pi * t / T)
+    s_dot = 20.0 / T - 20.0 * pi / T * np.cos(pi * t / T)
+    s_ddot = 20.0 * pi**2 / T**2 * np.sin(pi * t / T)
 
-    c = v_c * t
+    c_x = 0.5 * t
+    c_x_dot = 0.5
 
-    p0_local = np.array([-0.5, 0.5])
+    c_y = 20.0 * (t / T) - 15.0 * np.sin(pi * t / T)
+    c_y_dot = 20.0 / T - 15.0 * pi / T * np.cos(pi * t / T)
+    c_y_ddot = 15.0 * pi**2 / T**2 * np.sin(pi * t / T)
+
+    c = np.array([c_x, c_y])
+    c_dot = np.array([c_x_dot, c_y_dot])
+    c_ddot = np.array([0.0, c_y_ddot])
+
     p1_local = np.array([0.5, 0.5])
+    p2_local = np.array([0.5, -0.5])
 
     leader_positions = np.array([
-        c + scale * p0_local,
-        c + scale * p1_local,
+        c + s * p1_local,
+        c + s * p2_local,
     ])
 
     leader_velocities = np.array([
-        v_c + scale_dot * p0_local,
-        v_c + scale_dot * p1_local,
+        c_dot + s_dot * p1_local,
+        c_dot + s_dot * p2_local,
     ])
 
     leader_accelerations = np.array([
-        scale_ddot * p0_local,
-        scale_ddot * p1_local,
+        c_ddot + s_ddot * p1_local,
+        c_ddot + s_ddot * p2_local,
     ])
 
     return leader_positions, leader_velocities, leader_accelerations
@@ -97,11 +107,21 @@ def run_simulation():
     k_p = 0.5
     k_v = 2.0
     dt = 0.01
-    T = 30.0
+    T = 180.0
     n_steps = int(T / dt) + 1
 
     B = compute_bearing_laplacian(graph, desired_bearings)
-    B_ll, B_lf, B_fl, B_ff = partition_bearing_laplacian(B, graph)
+    d = 2
+    leader_dofs = []
+    for i in graph.leader_indices:
+        leader_dofs.extend([d*i, d*i+1])
+    follower_dofs = []
+    for i in graph.follower_indices:
+        follower_dofs.extend([d*i, d*i+1])
+    B_ll = B[np.ix_(leader_dofs, leader_dofs)]
+    B_lf = B[np.ix_(leader_dofs, follower_dofs)]
+    B_fl = B[np.ix_(follower_dofs, leader_dofs)]
+    B_ff = B[np.ix_(follower_dofs, follower_dofs)]
     B_ff_inv = np.linalg.inv(B_ff)
 
     n_followers = len(graph.follower_indices)
@@ -141,7 +161,7 @@ def run_simulation():
         delta_v = v_f + B_ff_inv @ B_fl @ v_l
 
         v_l_dot = leader_accel.flatten()
-        u_f = -k_p * delta_p - k_v * delta_v
+        u_f = -k_p * (B_ff @ delta_p) - k_v * (B_ff @ delta_v) - B_ff_inv @ (B_fl @ v_l_dot)
 
         controls = u_f.reshape(n_followers, 2)
 
@@ -159,7 +179,7 @@ def plot_results(time_array, positions_history, velocities_history, bearing_erro
     leader_idx = [1, 2]
     follower_idx = [0, 3]
     snapshot_edges = [(0, 1), (0, 2), (0, 3), (1, 2), (2, 3)]
-    n_snapshots = 3
+    n_snapshots = 5
 
     # Fig. 4(a): Trajectory with snapshot formations
     ax1 = axes[0, 0]
