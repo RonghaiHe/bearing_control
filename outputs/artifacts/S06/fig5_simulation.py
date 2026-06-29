@@ -77,26 +77,21 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def scale_function(t, v_c_y=1.0, obstacle_y=45.0, contraction_zone=15.0, min_scale=0.3):
-    """Scale that contracts near obstacle at y=45."""
+def scale_function(t, v_c_y=1.0, obstacle_y=45.0, contraction_zone=5.0, min_scale=0.3):
+    """Scale that contracts near obstacle - sharp Gaussian transition."""
     y_center = v_c_y * t
-    dist_to_obstacle = abs(y_center - obstacle_y)
-    if dist_to_obstacle < contraction_zone:
-        factor = dist_to_obstacle / contraction_zone
-        return min_scale + (1.0 - min_scale) * factor
-    else:
-        return 1.0
+    dist = y_center - obstacle_y
+    sigma = contraction_zone / 2.0
+    return min_scale + (1.0 - min_scale) * np.exp(-dist**2 / (2.0 * sigma**2))
 
 
-def scale_dot_function(t, v_c_y=1.0, obstacle_y=45.0, contraction_zone=15.0, min_scale=0.3):
-    """Derivative of scale_function."""
+def scale_dot_function(t, v_c_y=1.0, obstacle_y=45.0, contraction_zone=5.0, min_scale=0.3):
+    """Derivative of Gaussian scale function."""
     y_center = v_c_y * t
-    dist_to_obstacle = abs(y_center - obstacle_y)
-    if dist_to_obstacle < contraction_zone:
-        sign = 1.0 if y_center >= obstacle_y else -1.0
-        return sign * v_c_y * (1.0 - min_scale) / contraction_zone
-    else:
-        return 0.0
+    dist = y_center - obstacle_y
+    sigma = contraction_zone / 2.0
+    gaussian = np.exp(-dist**2 / (2.0 * sigma**2))
+    return (1.0 - min_scale) * gaussian * (-dist / sigma**2) * v_c_y
 
 
 def leader_motion_3d(t):
@@ -107,8 +102,8 @@ def leader_motion_3d(t):
     v_c = np.array([0.0, 1.0, 0.0])
     v_c_y = 2.0
 
-    s = scale_function(t, v_c_y, contraction_zone=10.0)
-    s_dot = scale_dot_function(t, v_c_y, contraction_zone=10.0)
+    s = scale_function(t, v_c_y, contraction_zone=5.0)
+    s_dot = scale_dot_function(t, v_c_y, contraction_zone=5.0)
 
     c = v_c * t
 
