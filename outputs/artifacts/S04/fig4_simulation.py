@@ -155,30 +155,48 @@ def run_simulation():
 def plot_results(time_array, positions_history, velocities_history, bearing_errors):
     """Generate figures matching Fig. 4 in the paper."""
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    
-    # Fig. 4(a): Trajectory
+
+    leader_idx = [0, 1]
+    follower_idx = [2, 3]
+    snapshot_edges = [(0, 1), (0, 2), (0, 3), (1, 2), (2, 3)]
+    n_snapshots = 5
+
+    # Fig. 4(a): Trajectory with snapshot formations
     ax1 = axes[0, 0]
-    colors = ['blue', 'red', 'green', 'orange']
-    labels = ['Leader 0', 'Leader 1', 'Follower 2', 'Follower 3']
-    
+
     for i in range(4):
-        ax1.plot(positions_history[:, i, 0], positions_history[:, i, 1], 
-                color=colors[i], label=labels[i], linewidth=2)
-    
-    # Mark start and end points
-    for i in range(4):
-        ax1.scatter(positions_history[0, i, 0], positions_history[0, i, 1], 
-                   color=colors[i], marker='o', s=100, zorder=5)
-        ax1.scatter(positions_history[-1, i, 0], positions_history[-1, i, 1], 
-                   color=colors[i], marker='x', s=100, zorder=5)
-    
-    ax1.set_xlabel('x')
-    ax1.set_ylabel('y')
+        style = '--'
+        color = 'red' if i in leader_idx else 'blue'
+        ax1.plot(positions_history[:, i, 0], positions_history[:, i, 1],
+                 color=color, linestyle=style, linewidth=1.5)
+
+    snapshot_indices = np.linspace(0, len(time_array) - 1, n_snapshots, dtype=int)
+    for si in snapshot_indices:
+        pos = positions_history[si]
+        for (i, j) in snapshot_edges:
+            ax1.plot([pos[i, 0], pos[j, 0]], [pos[i, 1], pos[j, 1]],
+                     'k-', linewidth=1)
+        for i in leader_idx:
+            ax1.plot(pos[i, 0], pos[i, 1], marker='>', color='red',
+                     markersize=8, markerfacecolor='red', zorder=5)
+        for i in follower_idx:
+            ax1.plot(pos[i, 0], pos[i, 1], marker='o', color='blue',
+                     markersize=8, markerfacecolor='blue', zorder=5)
+
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='>', color='red', markerfacecolor='red',
+               markersize=8, label='Leader', linestyle='None'),
+        Line2D([0], [0], marker='o', color='blue', markerfacecolor='blue',
+               markersize=8, label='Follower', linestyle='None'),
+    ]
+    ax1.legend(handles=legend_elements, loc='upper left')
+    ax1.set_xlabel('x (m)')
+    ax1.set_ylabel('y (m)')
     ax1.set_title('(a) Trajectory')
-    ax1.legend()
     ax1.grid(True, alpha=0.3)
     ax1.set_aspect('equal')
-    
+
     # Fig. 4(b): Total bearing error
     ax2 = axes[0, 1]
     ax2.plot(time_array, bearing_errors, 'b-', linewidth=2)
@@ -186,40 +204,44 @@ def plot_results(time_array, positions_history, velocities_history, bearing_erro
     ax2.set_ylabel('Total Bearing Error')
     ax2.set_title(r'(b) Total Bearing Error $\sum_{(i,j) \in \mathcal{E}} \|g_{ij}(t) - g_{ij}^*\|$')
     ax2.grid(True, alpha=0.3)
-    
-    # Fig. 4(c): Velocity (x-component)
+
+    # Fig. 4(c): x-velocity
     ax3 = axes[1, 0]
-    for i in range(4):
-        ax3.plot(time_array, velocities_history[:, i, 0], 
-                color=colors[i], label=labels[i], linewidth=2)
-    
+    for i in leader_idx:
+        ax3.plot(time_array, velocities_history[:, i, 0],
+                 color='red', linestyle='-', linewidth=2)
+    for i in follower_idx:
+        ax3.plot(time_array, velocities_history[:, i, 0],
+                 color='blue', linestyle='--', linewidth=2)
+    ax3.plot([], [], color='red', linestyle='-', linewidth=2, label='Leader')
+    ax3.plot([], [], color='blue', linestyle='--', linewidth=2, label='Follower')
     ax3.set_xlabel('Time')
-    ax3.set_ylabel('x-velocity')
-    ax3.set_title('(c) Velocity')
+    ax3.set_ylabel('x-velocity (m/s)')
+    ax3.set_title('(c) x-velocity')
     ax3.legend()
     ax3.grid(True, alpha=0.3)
-    
-    # Additional: Scale over time
+
+    # Fig. 4(d): y-velocity
     ax4 = axes[1, 1]
-    scales = []
-    for step in range(len(time_array)):
-        positions = positions_history[step]
-        centroid = np.mean(positions, axis=0)
-        diffs = positions - centroid
-        scale = np.sqrt(np.mean(np.sum(diffs**2, axis=1)))
-        scales.append(scale)
-    
-    ax4.plot(time_array, scales, 'g-', linewidth=2)
-    ax4.set_xlabel('Time')
-    ax4.set_ylabel('Formation Scale')
-    ax4.set_title('Formation Scale Over Time')
+    for i in leader_idx:
+        ax4.plot(time_array, velocities_history[:, i, 1],
+                 color='red', linestyle='-', linewidth=2)
+    for i in follower_idx:
+        ax4.plot(time_array, velocities_history[:, i, 1],
+                 color='blue', linestyle='--', linewidth=2)
+    ax4.plot([], [], color='red', linestyle='-', linewidth=2, label='Leader')
+    ax4.plot([], [], color='blue', linestyle='--', linewidth=2, label='Follower')
+    ax4.set_xlabel('Time (sec)')
+    ax4.set_ylabel('y-velocity (m/s)')
+    ax4.set_title('(d) y-velocity')
+    ax4.legend()
     ax4.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
-    plt.savefig('/home/ronghai/bearing_control/outputs/artifacts/S04/fig4_simulation.png', 
+    plt.savefig('/home/ronghai/bearing_control/outputs/artifacts/S04/fig4_simulation.png',
                 dpi=150, bbox_inches='tight')
     plt.close()
-    
+
     print("Figure 4 saved to outputs/artifacts/S04/fig4_simulation.png")
 
 
