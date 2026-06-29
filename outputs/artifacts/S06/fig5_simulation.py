@@ -133,8 +133,8 @@ def leader_motion_3d(t):
 
     c = v_c * t
 
-    p0_local = np.array([0.0, 1.0, 1.0])  # cube vertex 0
-    p1_local = np.array([1.0, 1.0, 1.0])  # cube vertex 1
+    p0_local = np.array([-10.0, 10.0, 0.0])
+    p1_local = np.array([0.0, 10.0, 0.0])
 
     leader_positions = np.array([
         c + s * p0_local,
