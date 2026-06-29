@@ -76,7 +76,7 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.1):
+def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.05):
     """Bucket-shaped scale: normal → zoom out → pass → zoom in."""
     y = v_c_y * t
     
@@ -99,7 +99,7 @@ def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.1):
         return 1.0
 
 
-def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.1):
+def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.05):
     """Derivative of bucket-shaped scale function."""
     y = v_c_y * t
     
@@ -126,7 +126,7 @@ def leader_motion_3d(t):
     Leaders travel along Y-axis. Formation contracts near obstacle at y=45.
     """
     v_c = np.array([0.0, 1.0, 0.0])
-    v_c_y = 2.0
+    v_c_y = 1.0
 
     s = scale_function(t, v_c_y)
     s_dot = scale_dot_function(t, v_c_y)
@@ -158,7 +158,7 @@ def run_simulation_3d():
     k_p = 0.5
     k_v = 2.0
     dt = 0.02
-    T = 80.0
+    T = 160.0
     n_steps = int(T / dt) + 1
 
     B = compute_bearing_laplacian(graph, desired_bearings)
