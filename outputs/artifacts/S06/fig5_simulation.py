@@ -76,12 +76,12 @@ def setup_cube_formation() -> Tuple[FormationGraph, Dict[Tuple[int, int], np.nda
     return graph, desired_bearings, initial_positions, initial_velocities
 
 
-def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.15):
+def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.3):
     """Bucket-shaped scale: normal → zoom out → pass → zoom in."""
     y = v_c_y * t
     
-    zoom_out_start = obstacle_y - 15.0  # y=30: start zooming out
-    zoom_out_end = obstacle_y - 5.0     # y=40: fully contracted
+    zoom_out_start = obstacle_y - 20.0  # y=30: start zooming out
+    zoom_out_end = obstacle_y - 10.0     # y=40: fully contracted
     zoom_in_start = obstacle_y + 5.0    # y=50: start expanding
     zoom_in_end = obstacle_y + 15.0     # y=60: fully expanded
     
@@ -99,12 +99,12 @@ def scale_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.15):
         return 1.0
 
 
-def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.15):
+def scale_dot_function(t, v_c_y=2.0, obstacle_y=45.0, min_scale=0.3):
     """Derivative of bucket-shaped scale function."""
     y = v_c_y * t
     
-    zoom_out_start = obstacle_y - 15.0  # y=30
-    zoom_out_end = obstacle_y - 5.0     # y=40
+    zoom_out_start = obstacle_y - 20.0  # y=30
+    zoom_out_end = obstacle_y - 10.0     # y=40
     zoom_in_start = obstacle_y + 5.0    # y=50
     zoom_in_end = obstacle_y + 15.0     # y=60
     
@@ -278,7 +278,7 @@ def plot_results_3d(time_array, positions_history, velocities_history, bearing_e
 
     # Draw ~6 snapshots
     n_snapshots = 6
-    snapshot_indices = [0, 1000, 2000, 3000]
+    snapshot_indices = [0, 800, 1800, 3500]
 
     for si in snapshot_indices:
         pos = positions_history[si]
