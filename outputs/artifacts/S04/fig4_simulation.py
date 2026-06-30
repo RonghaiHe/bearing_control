@@ -265,8 +265,82 @@ def plot_results(time_array, positions_history, velocities_history, bearing_erro
     print("Figure 4 saved to outputs/artifacts/S04/fig4_simulation.png")
 
 
+def generate_gif():
+    """Generate animated GIF showing formation moving with trajectory trails."""
+    import io
+    from PIL import Image
+
+    time_array, positions_history, velocities_history, bearing_errors = run_simulation()
+
+    n_frames = 150
+    frame_indices = np.linspace(0, len(time_array) - 1, n_frames, dtype=int)
+    trail_length = 50
+
+    leader_idx = [1, 2]
+    follower_idx = [0, 3]
+    snapshot_edges = [(0, 1), (0, 2), (0, 3), (1, 2), (2, 3)]
+
+    all_x = positions_history[:, :, 0]
+    all_y = positions_history[:, :, 1]
+    x_margin = (all_x.max() - all_x.min()) * 0.1
+    y_margin = (all_y.max() - all_y.min()) * 0.1
+    x_lim = (all_x.min() - x_margin, all_x.max() + x_margin)
+    y_lim = (all_y.min() - y_margin, all_y.max() + y_margin)
+
+    fig, ax = plt.subplots(figsize=(10, 8))
+    frames = []
+
+    for fi, frame_i in enumerate(frame_indices):
+        ax.clear()
+
+        trail_start = max(0, fi - trail_length)
+        for agent in range(4):
+            color = 'red' if agent in leader_idx else 'blue'
+            for t_idx in range(trail_start, fi):
+                alpha = 0.8 * (t_idx - trail_start) / max(1, fi - trail_start)
+                pos = positions_history[frame_indices[t_idx], agent]
+                ax.plot(pos[0], pos[1], 'o', color=color, markersize=3, alpha=alpha)
+
+        pos = positions_history[frame_i]
+        for (i, j) in snapshot_edges:
+            ax.plot([pos[i, 0], pos[j, 0]], [pos[i, 1], pos[j, 1]], 'k-', linewidth=1)
+
+        for i in leader_idx:
+            ax.plot(pos[i, 0], pos[i, 1], marker='>', color='red',
+                    markersize=8, markerfacecolor='red', zorder=5)
+        for i in follower_idx:
+            ax.plot(pos[i, 0], pos[i, 1], marker='o', color='blue',
+                    markersize=8, markerfacecolor='blue', zorder=5)
+
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+        ax.set_aspect('equal')
+        ax.grid(True, alpha=0.3)
+        ax.set_xlabel('x (m)')
+        ax.set_ylabel('y (m)')
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        frames.append(Image.open(buf).copy())
+        buf.close()
+
+    plt.close(fig)
+
+    output_path = '/home/ronghai/bearing_control/outputs/artifacts/S04/fig4_simulation.gif'
+    frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=67,
+        loop=0
+    )
+    print(f"GIF saved to {output_path}")
+
+
 if __name__ == "__main__":
     print("Running Fig. 4 simulation...")
     time_array, positions_history, velocities_history, bearing_errors = run_simulation()
     plot_results(time_array, positions_history, velocities_history, bearing_errors)
+    generate_gif()
     print("Simulation complete!")

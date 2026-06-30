@@ -393,9 +393,87 @@ def plot_curves(time_array, positions_history, velocities_history, bearing_error
     print("Figure 5 curves saved to outputs/artifacts/S06/fig5_simulation_curves.png")
 
 
+def generate_gif():
+    """Generate animated GIF showing 3D cube formation moving with trajectory trails."""
+    import io
+    from PIL import Image
+
+    time_array, positions_history, velocities_history, bearing_errors = run_simulation_3d()
+
+    n_frames = 150
+    frame_indices = np.linspace(0, len(time_array) - 1, n_frames, dtype=int)
+    trail_length = 50
+
+    leader_idx = [0, 1]
+    follower_idx = list(range(2, 8))
+    snapshot_edges = [
+        (0, 1), (0, 2), (0, 4), (0, 7),
+        (1, 3), (1, 5),
+        (2, 3), (2, 6),
+        (3, 7),
+        (4, 5), (4, 6),
+        (5, 7),
+        (6, 7)
+    ]
+
+    fig = plt.figure(figsize=(14, 8))
+    ax = fig.add_subplot(111, projection='3d')
+    frames = []
+
+    for fi, frame_i in enumerate(frame_indices):
+        ax.clear()
+
+        trail_start = max(0, fi - trail_length)
+        for agent in range(8):
+            color = 'red' if agent in leader_idx else 'blue'
+            for t_idx in range(trail_start, fi):
+                alpha = 0.8 * (t_idx - trail_start) / max(1, fi - trail_start)
+                pos = positions_history[frame_indices[t_idx], agent]
+                ax.scatter(pos[0], pos[1], pos[2], c=color, s=10, alpha=alpha)
+
+        pos = positions_history[frame_i]
+        for (i, j) in snapshot_edges:
+            ax.plot([pos[i, 0], pos[j, 0]], [pos[i, 1], pos[j, 1]], [pos[i, 2], pos[j, 2]],
+                    'k-', linewidth=0.6, alpha=0.5)
+
+        for i in leader_idx:
+            ax.scatter(pos[i, 0], pos[i, 1], pos[i, 2], c='red', marker='>', s=80,
+                      edgecolors='darkred', linewidths=0.5)
+        for i in follower_idx:
+            ax.scatter(pos[i, 0], pos[i, 1], pos[i, 2], c='blue', marker='o', s=50,
+                      edgecolors='darkblue', linewidths=0.5)
+
+        draw_obstacle(ax, obstacle_y=45.0, wall_size=13.0, opening_size=4.0)
+
+        ax.set_xlim(-13, 13)
+        ax.set_ylim(-5, 80)
+        ax.set_zlim(-13, 13)
+        ax.set_aspect('equal')
+        ax.view_init(elev=15, azim=-20)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        frames.append(Image.open(buf).copy())
+        buf.close()
+
+    plt.close(fig)
+
+    output_path = '/home/ronghai/bearing_control/outputs/artifacts/S06/fig5_simulation.gif'
+    frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=67,
+        loop=0
+    )
+    print(f"GIF saved to {output_path}")
+
+
 if __name__ == "__main__":
     print("Running Fig. 5 simulation (3D cube formation through obstacle)...")
     time_array, positions_history, velocities_history, bearing_errors = run_simulation_3d()
     plot_results_3d(time_array, positions_history, velocities_history, bearing_errors)
     plot_curves(time_array, positions_history, velocities_history, bearing_errors)
+    generate_gif()
     print("Simulation complete!")
